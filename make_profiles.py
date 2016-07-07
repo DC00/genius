@@ -63,7 +63,7 @@ def update_artist(artist, url, rclient, db):
 			}
 		}
 	)
-	print artist['name'] + " 200 !!"
+	print artist['name'] + "         200"
 	return True
 
 def main():
