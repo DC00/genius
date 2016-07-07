@@ -91,6 +91,11 @@ def update_url(artist, url, db):
 def is_int(x):
 	return isinstance(x, (int, long))
 
+def manually_update(a, db):
+	rclient = requests.Session()
+	update_artist(a, "http://genius.com/21themusician", rclient, db)
+
+
 def main():
 	client = MongoClient()
 	db = client.genius['artists']
@@ -100,11 +105,6 @@ def main():
 	for a in missing_artists:
 	 	fix_url(a, db)
 	 	print('\n')
-
-	# a = missing_artists[2]
-	# fix_url(a, db)
-	# rclient = requests.Session()
-	# update_artist(a, "http://genius.com/TheScreenGenius", rclient, db)
 
 if __name__ == "__main__":
 	main()
