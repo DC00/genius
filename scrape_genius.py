@@ -11,6 +11,7 @@ url="http://genius.com/verified-artists?page=1"
 last_page = 135
 current_page = 1
 artists = []
+headers = {'user-agent' : 'Chrome/51.0.2 (Macintosh; Intel Mac OS X 10.11.5); Daniel Coo/coo.danielj@gmail.com'}
 
 def make_artist(artist_name, artist_iq):
 	global artists
@@ -47,7 +48,7 @@ def main():
 	while current_page <= last_page:
 		print(current_page)
 		client = requests.Session()
-		response = client.get(url)
+		response = client.get(url, headers=headers)
 
 		soup = BeautifulSoup(response.text, 'html.parser')
 		data = soup.find_all('div', attrs={'class':'user_details'})

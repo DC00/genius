@@ -12,6 +12,7 @@ alternates = {
 	'Raury' : 'KingRaur',
 	'3010'  : 'Troismilledix',
 }
+headers = {'user-agent' : 'Chrome/51.0.2 (Macintosh; Intel Mac OS X 10.11.5); Daniel Coo/coo.danielj@gmail.com'}
 
 def make_url(artist):
 	name = artist['name'].replace(' ', '')
@@ -21,7 +22,7 @@ def make_url(artist):
 	return BASE_URL + unidecode(ccname)
 
 def url_is_good(url, rclient):
-	response = rclient.get(url)
+	response = rclient.get(url, headers=headers)
 	return response.status_code == 200
 
 def get_followers(info):
@@ -40,7 +41,7 @@ def get_annotations(info):
 	return annotations
 
 def update_artist(artist, url, rclient, db):
-	response = rclient.get(url)
+	response = rclient.get(url, headers=headers)
 	if response.status_code == 404:
 		print artist['name']
 		return False
