@@ -1,6 +1,6 @@
 /*
  * Genius.com scraper
- * Inserts verified artist data into mongodb instance
+ * Artist name, Genius iq, followers, and annotation count
  */
 
 const puppeteer = require('puppeteer')
@@ -11,58 +11,37 @@ const Artist = require('./artist.js')
 var config = require('./config.json')
 
 async function scrape() {
-  const browser = await puppeteer.launch({headless : false}).catch(err => { console.log(err) })
-  const page = await browser.newPage().catch(err => { console.log(err) })
+  process.setMaxListeners(100);
+  const browser = await puppeteer.launch({headless : false})
+  const page = await browser.newPage()
   var data
 
-  /*
-  await page.goto(config.genius_root + "/Eminem").catch(err => { console.log(err) })
-  let html = await page.content().catch(err => { console.log(err) })
-  let $ = cheerio.load(html)
-  console.log($('.profile_tabs-tab-count').text())
-  */
-
   for (var i = 1; i < config.max_page; i++) {
-    console.log(config.genius_url + i)
-    await page.goto(config.genius_url + i).catch(err => { console.log(err) })
-    let html = await page.content().catch(err => { console.log(err) })
+    await page.goto(config.verified_artists_url + i)
+    let html = await page.content()
     let $ = cheerio.load(html)
-    data = $('.badge_container').map(async function(inx, badge) {
+
+    data = await Promise.all($('.badge_container').map(async function(inx, badge) {
       var name = $(badge).find('[data-id]').text().trim()
       var iq = $(badge).find('.iq').text().trim()
       var url = $(badge).find('a').attr('href')
-      var followers = async function() {
-        try {
-          await artistPage.goto(config.genius_root + url, { waitUntil: "load" }).catch(err => { console.log(err) })
-          let html2 = await artistPage.content().catch(err => { console.log(err) })
-          let $ = await cheerio.load(html2)
-          var f = $('.profile_tabs-tab-count').text()
-          return f
+      await page.goto(config.genius_root + url)
+      var followers = await page.evaluate((selector) => {
+        console.log(document.getElementsByClassName(selector))
+        return document.querySelector(selector).innerText
+      }, config.follower_sel)
 
-        } catch (e) {
-          console.log(e)
-        }
-        /* let artistPage = await browser.newPage()
-        await artistPage.goto(config.genius_root + url, { waitUntil: "load" }).catch(err => { console.log(err) })
-        let html2 = await artistPage.content().catch(err => { console.log(err) })
-        let $ = await cheerio.load(html2)
-        var f = $('.profile_tabs-tab-count').text()
-        */
-      }
+      // get annotations on same page
+      // infinite scrolling bullshit
+
       return {name, iq, url, followers}
-    }).get()
+    }).get())
   }
 
-  await browser.close().catch(err => { console.log(err) })
+  browser.close()
   return data
 }
 
-// scrape() is async, returns Promise
 scrape()
   .then(data => { console.log(data) })
   .catch(err => { console.log(err) })
-
-
-
-
-
