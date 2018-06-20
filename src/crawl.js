@@ -10,33 +10,48 @@ const Promise = require('bluebird')
 const Artist = require('./artist.js')
 var config = require('./config.json')
 
+
+
 function getAnnotations() {
-
-
+  return 100
 }
 
 async function scrapeInfiniteScroll(page, getAnnotations, maxCount, delay=1000) {
   // click 'all contributions' dropdown, select annotations
-  let dropdown = document.querySelectorAll('body > routable-page > ng-outlet > routable-profile-page > ng-outlet > routed-page > profile-page > div.column_layout > div.column_layout-column_span.column_layout-column_span--primary > div > div > div > select-dropdown > div > div:nth-child(2)')
-  console.log(dropdown)
+
+  var element = await page.evaluate(() => {
+    return findElemByText({str: "All Contributions"})[0].click()
+  })
+
   let annotations
   try {
-  while (annotations < maxCount) {
-    annotations = await page.evaluate(getAnnotations)
-
+    while (annotations < maxCount) {
+      annotations = await page.evaluate(getAnnotations)
     }
-
   } catch (err) {
       console.log(err)
   }
-  return 
+  return annotations
+}
+
+function findElemByText({str, selector = '*', leaf = 'outerHTML'}) {
+  // generate regex from string
+  const regex = new RegExp(str, 'gmi');
+
+  // search the element for specific word
+  const matchOuterHTML = e => (regex.test(e[leaf]))
+
+  // array of elements
+  const elementArray = [...document.querySelectorAll(selector)];
+
+  // return filtered element list
+  return elementArray.filter(matchOuterHTML)
 }
 
 async function scrape() {
   process.setMaxListeners(100)
   const browser = await puppeteer.launch({
-    headless : false,
-    slowMo: 250
+    headless : false
   })
   const page = await browser.newPage()
   var data
