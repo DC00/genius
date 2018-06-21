@@ -10,6 +10,18 @@ const Promise = require('bluebird')
 const Artist = require('./artist.js')
 var config = require('./config.json')
 
+function getAnnotations() {
+  
+}
+
+async scrapeInfiniteScroll(page, getAnnotations, count, delay) {
+  // select annotations
+  await page.click('body > routable-page > ng-outlet > routable-profile-page > ng-outlet > routed-page > profile-page > div.column_layout > div.column_layout-column_span.column_layout-column_span--primary > div > div > div > select-dropdown > span')
+  await page.click('body > routable-page > ng-outlet > routable-profile-page > ng-outlet > routed-page > profile-page > div.column_layout > div.column_layout-column_span.column_layout-column_span--primary > div > div > div > select-dropdown > div > div:nth-child(2)')
+
+
+
+}
 async function scrape() {
   process.setMaxListeners(100)
   const browser = await puppeteer.launch({
@@ -19,13 +31,10 @@ async function scrape() {
   var data
 
   await page.goto(config.genius_root + '/Eminem', {waitUntil: "networkidle2"})
-  // var annotations = await scrapeInfiniteScroll(page, getAnnotations, 1000, 1000)
+  var annotations = await scrapeInfiniteScroll(page, getAnnotations, 1000, 1000)
 
-  const html = await page.content()
-  const $ = cheerio.load(html)
-  console.log($('body > routable-page > ng-outlet > routable-profile-page > ng-outlet > routed-page > profile-page > div.column_layout > div.column_layout-column_span.column_layout-column_span--primary > div > div > div > select-dropdown > div > div:nth-child(2)').text())
-  await page.click('body > routable-page > ng-outlet > routable-profile-page > ng-outlet > routed-page > profile-page > div.column_layout > div.column_layout-column_span.column_layout-column_span--primary > div > div > div > select-dropdown > span')
-  data = 10
+
+
 
 
   /*
