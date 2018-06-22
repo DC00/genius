@@ -11,20 +11,25 @@ const Artist = require('./artist.js')
 var config = require('./config.json')
 
 async function scrollToBottom(page, prevHeight) {
-  let pageHeight = await page.evaluate('document.body.scrollHeight')
+  console.log("in scroll to bottom")
+  const pageHeight = await page.evaluate('document.body.scrollHeight')
   if (prevHeight < pageHeight)
     await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
   return pageHeight
 }
 
 async function getAnnotations(page) {
+  console.log("in get annotations")
   const html = await page.content()
   const $ = cheerio.load(html)
-  return $('.standalone_annotation-annotation').length
+  await page.waitFor(1000)
+  const annotations = $('.standalone_annotation-annotation').length
+  console.log("in get annotations, length : " + annotations)
+  return annotations
 }
 
 async function scrapeInfiniteScroll(page, getAnnotations, delay) {
-  console.log("hhdahdhasdhfashfdh")
+  console.log("in inf scroll")
   let prevAnnotationCount = -9
   let annotationCount = await getAnnotations(page)
   let prevHeight = -1
@@ -36,6 +41,7 @@ async function scrapeInfiniteScroll(page, getAnnotations, delay) {
     prevHeight = await scrollToBottom(page, prevHeight)
     await page.waitFor(delay)
     annotationCount = await getAnnotations(page)
+    console.log("annotation count: " + annotationCount)
   }
 
   return annotationCount
@@ -43,13 +49,13 @@ async function scrapeInfiniteScroll(page, getAnnotations, delay) {
 async function scrape() {
   process.setMaxListeners(100)
   const browser = await puppeteer.launch({
-    headless : false
+    headless : true
   })
   const page = await browser.newPage()
-  var data
+  let data = []
 
   /*
-  await page.goto(config.genius_root + '/NickiMinaj', {waitUntil: "networkidle2"})
+  await page.goto(config.genius_root + '/Eminem', {waitUntil: "networkidle2"})
   await page.click(config.total_contributions_sel)
   await page.click(config.annotations_sel)
   var annotations = await scrapeInfiniteScroll(page, getAnnotations, 1000)
@@ -71,19 +77,29 @@ async function scrape() {
         return document.querySelector(selector).innerText
       }, config.follower_sel)
 
-      await scrollToBottom(page, 0)
-      await page.waitFor(1000)
-      await page.click(config.total_contributions_sel)
-      await page.click(config.total_contributions_sel)
-      await page.waitFor(1000)
-      await page.click(config.annotations_sel)
-      var annotations = await scrapeInfiniteScroll(page, getAnnotations, 1000)
+      try {
+        await page.click(config.total_contributions_sel, {
+          button : "left",
+          clickCount : 1,
+          delay : 50
+        })
+        await page.click(config.annotations_sel, {
+          button : "left",
+          clickCount : 1,
+          delay : 50
+        })
+      } catch (err) {
+        console.log("wtf click" + err)
+      }
+      console.log("calling get annotations")
+      const annotations = await scrapeInfiniteScroll(page, getAnnotations, 1000)
 
+      console.log("returning data")
       return {name, iq, url, followers, annotations}
     }).get())
   }
 
-  // await browser.close()
+  await browser.close()
   return data
 }
 
