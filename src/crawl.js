@@ -10,17 +10,35 @@ const Promise = require('bluebird')
 const Artist = require('./artist.js')
 var config = require('./config.json')
 
-function getAnnotations() {
-  
+async function scrollToBottom(page, prevHeight) {
+  let pageHeight = await page.evaluate('document.body.scrollHeight')
+  if (prevHeight < pageHeight)
+    await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
+  return pageHeight
 }
 
-async scrapeInfiniteScroll(page, getAnnotations, count, delay) {
-  // select annotations
-  await page.click('body > routable-page > ng-outlet > routable-profile-page > ng-outlet > routed-page > profile-page > div.column_layout > div.column_layout-column_span.column_layout-column_span--primary > div > div > div > select-dropdown > span')
-  await page.click('body > routable-page > ng-outlet > routable-profile-page > ng-outlet > routed-page > profile-page > div.column_layout > div.column_layout-column_span.column_layout-column_span--primary > div > div > div > select-dropdown > div > div:nth-child(2)')
+async function getAnnotations(page) {
+  const html = await page.content()
+  const $ = cheerio.load(html)
+  return $('.standalone_annotation-annotation').length
+}
 
+async function scrapeInfiniteScroll(page, getAnnotations, delay) {
+  console.log("hhdahdhasdhfashfdh")
+  let prevAnnotationCount = -9
+  let annotationCount = await getAnnotations(page)
+  let prevHeight = -1
 
+  await scrollToBottom(page, prevHeight)
 
+  while (prevAnnotationCount <= (annotationCount - 8)) {
+    prevAnnotationCount = annotationCount
+    prevHeight = await scrollToBottom(page, prevHeight)
+    await page.waitFor(delay)
+    annotationCount = await getAnnotations(page)
+  }
+
+  return annotationCount
 }
 async function scrape() {
   process.setMaxListeners(100)
@@ -30,15 +48,15 @@ async function scrape() {
   const page = await browser.newPage()
   var data
 
-  await page.goto(config.genius_root + '/Eminem', {waitUntil: "networkidle2"})
-  var annotations = await scrapeInfiniteScroll(page, getAnnotations, 1000, 1000)
-
-
-
-
-
   /*
-  for (var i = 1; i < config.max_page; i++) {
+  await page.goto(config.genius_root + '/NickiMinaj', {waitUntil: "networkidle2"})
+  await page.click(config.total_contributions_sel)
+  await page.click(config.annotations_sel)
+  var annotations = await scrapeInfiniteScroll(page, getAnnotations, 1000)
+  console.log("total annotation count --> " + annotations)
+  */
+
+  for (var i = 2; i < config.max_page; i++) {
     await page.goto(config.verified_artists_url + i)
     const html = await page.content()
     const $ = cheerio.load(html)
@@ -47,19 +65,23 @@ async function scrape() {
       const name = $(badge).find('[data-id]').text().trim()
       const iq = $(badge).find('.iq').text().trim()
       const url = $(badge).find('a').attr('href')
-      await page.goto(config.genius_root + url)
+      await page.goto(config.genius_root + url, {waitUntil: "networkidle2"})
       const followers = await page.evaluate((selector) => {
         console.log(document.getElementsByClassName(selector))
         return document.querySelector(selector).innerText
       }, config.follower_sel)
 
-      var annotations = await scrapeInfiniteScroll(page, getAnnotations, maxCount, 1000)
+      await scrollToBottom(page, 0)
+      await page.waitFor(1000)
+      await page.click(config.total_contributions_sel)
+      await page.click(config.total_contributions_sel)
+      await page.waitFor(1000)
+      await page.click(config.annotations_sel)
+      var annotations = await scrapeInfiniteScroll(page, getAnnotations, 1000)
 
-
-      return {name, iq, url, followers}
+      return {name, iq, url, followers, annotations}
     }).get())
   }
-  */
 
   // await browser.close()
   return data
