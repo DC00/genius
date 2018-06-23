@@ -19,7 +19,6 @@ async function scrollToBottom(page, prevHeight) {
 }
 
 async function getAnnotations(page) {
-  console.log("in get annotations")
   const html = await page.content()
   const $ = cheerio.load(html)
   await page.waitFor(1000)
@@ -28,6 +27,8 @@ async function getAnnotations(page) {
   return annotations
 }
 
+
+/*
 async function scrapeInfiniteScroll(page, getAnnotations, delay) {
   console.log("in inf scroll")
   let prevAnnotationCount = -9
@@ -46,12 +47,37 @@ async function scrapeInfiniteScroll(page, getAnnotations, delay) {
 
   return annotationCount
 }
+*/
+
+async function scrapeArtistPage(data, artistPage) {
+  console.log("in scrape artist page")
+  let annotationCount = 0
+  console.log(config.genius_root + data.url)
+  await artistPage.goto(config.genius_root + data.url, {waitUntil: "networkidle2"})
+
+  let prevAnnotationCount = -9
+  let prevHeight = -1
+  annotationCount = await getAnnotations(artistPage)
+
+  while (prevAnnotationCount <= (annotationCount - 8)) {
+    prevAnnotationCount = annotationCount
+    prevHeight = await scrollToBottom(artistPage, prevHeight)
+    await artistPage.waitFor(1000)
+    annotationCount = await getAnnotations(artistPage)
+    console.log("annotation count: " + annotationCount)
+  }
+
+  return annotationCount
+
+}
+
+
 async function scrape() {
-  process.setMaxListeners(100)
   const browser = await puppeteer.launch({
-    headless : true
+    headless : false
   })
   const page = await browser.newPage()
+  const artistPage = await browser.newPage()
   let data = []
 
   /*
@@ -62,15 +88,18 @@ async function scrape() {
   console.log("total annotation count --> " + annotations)
   */
 
-  for (var i = 2; i < config.max_page; i++) {
+  for (var i = 1; i < config.max_page; i++) {
     await page.goto(config.verified_artists_url + i)
     const html = await page.content()
     const $ = cheerio.load(html)
 
-    data = await Promise.all($('.badge_container').map(async function(inx, badge) {
+    data = $('.badge_container').map(function(inx, badge) {
       const name = $(badge).find('[data-id]').text().trim()
       const iq = $(badge).find('.iq').text().trim()
       const url = $(badge).find('a').attr('href')
+
+
+      /*
       await page.goto(config.genius_root + url, {waitUntil: "networkidle2"})
       const followers = await page.evaluate((selector) => {
         console.log(document.getElementsByClassName(selector))
@@ -93,11 +122,12 @@ async function scrape() {
       }
       console.log("calling get annotations")
       const annotations = await scrapeInfiniteScroll(page, getAnnotations, 1000)
+      */
 
-      console.log("returning data")
-      return {name, iq, url, followers, annotations}
-    }).get())
+      return {name, iq, url}
+    }).get()
   }
+
 
   await browser.close()
   return data
