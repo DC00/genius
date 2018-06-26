@@ -137,41 +137,28 @@ function forEachPromise(items, fn) {
 scrape()
   .then(async data => {
     const browser = await puppeteer.launch({headless: false})
+
+    /*
     const page = await browser.newPage()
     await page.goto(config.genius_root + data[0].url, { waitUntil : "networkidle2" })
     const followers = await page.evaluate((selector) => {
       return document.querySelector(selector).innerText
     }, config.follower_sel)
     console.log(followers)
+    */
 
   
-    await Promise.all(data.forEach(d => {
-      return new Promise(async (resolve, reject) => {
-        await page.goto(config.genius_root + d.url, { waitUntil : "networkidle2" }) 
-        d.followers = await page.evaluate((selector) => {
-          return document.querySelector(selector).innerText
-        }, config.follower_sel)
-        console.log(d.followers)
-        await page.waitFor(1000)
-      })
-    }))
+    data.map(async d => {
+      const page = await browser.newPage()
+      await page.goto(config.genius_root + d.url, { waitUntil : "networkidle2" })
+      d.followers = await page.evaluate((selector) => {
 
+      }, config.follower_sel)
+      console.log(d.followers)
 
+      return page.close()
+    })
 
-    /*
-    const promises = []
-    for (var i = 0; i < Object.keys(data).length-1; i++) {
-      console.log("calling goto for " + config.genius_root + data[i].url)
-      promises.push(browser.newPage().then(async page => {
-        await page.goto(config.genius_root + data[i].url, { waitUntil : "networkidle2" })
-        data[i]["followers"] = await page.evaluate((selector) => {
-          return document.querySelector(selector).innerText
-        }, config.follower_sel)
-      }))
-    }
-
-    await Promise.all(promises)
-    */
 
     // console.log(data)
   
