@@ -3,12 +3,12 @@
  * Artist name, Genius iq, followers, and annotation count
  */
 
-const puppeteer = require('puppeteer')
+const puppeteer = require('puppeteer') 
 const cheerio = require('cheerio')
 const mongoose = require('mongoose')
 const Promise = require('bluebird')
 const Artist = require('./artist.js')
-var config = require('./config.json')
+const config = require('./config.json')
 
 async function scrollToBottom(page, prevHeight) {
   console.log("in scroll to bottom")
@@ -92,7 +92,7 @@ async function scrape() {
     const html = await page.content()
     const $ = cheerio.load(html)
 
-    $('.badge_container').map(function(inx, badge) {
+    data = await Promise.all($('.badge_container').map(async function(inx, badge) {
       const name = $(badge).find('[data-id]').text().trim()
       const iq = $(badge).find('.iq').text().trim()
       const url = $(badge).find('a').attr('href')
@@ -122,34 +122,58 @@ async function scrape() {
       const annotations = await scrapeInfiniteScroll(page, getAnnotations, 1000)
       */
 
-      data.push({"name":name, "iq":iq, "url":url})
-    })
+      return {"name":name, "iq":iq, "url":url}
+    }).get())
   }
 
   await browser.close()
   return data
 }
 
+function forEachPromise(items, fn) {
+  return items.reduce((promise, item) => promise.then(() => fn(item)), Promise.resolve())
+}
+
 scrape()
   .then(async data => {
-    console.log(data)
     const browser = await puppeteer.launch({headless: false})
     const page = await browser.newPage()
+    await page.goto(config.genius_root + data[0].url, { waitUntil : "networkidle2" })
+    const followers = await page.evaluate((selector) => {
+      return document.querySelector(selector).innerText
+    }, config.follower_sel)
+    console.log(followers)
+
+  
+    await Promise.all(data.forEach(d => {
+      return new Promise(async (resolve, reject) => {
+        await page.goto(config.genius_root + d.url, { waitUntil : "networkidle2" }) 
+        d.followers = await page.evaluate((selector) => {
+          return document.querySelector(selector).innerText
+        }, config.follower_sel)
+        console.log(d.followers)
+        await page.waitFor(1000)
+      })
+    }))
+
+
+
+    /*
     const promises = []
-    for (var i = 0; i < 1/*Object.keys(data).length-1*/; i++) {
+    for (var i = 0; i < Object.keys(data).length-1; i++) {
       console.log("calling goto for " + config.genius_root + data[i].url)
       promises.push(browser.newPage().then(async page => {
         await page.goto(config.genius_root + data[i].url, { waitUntil : "networkidle2" })
         data[i]["followers"] = await page.evaluate((selector) => {
-          return document.getElementsByClassName(selector).innerText
+          return document.querySelector(selector).innerText
         }, config.follower_sel)
       }))
     }
 
     await Promise.all(promises)
+    */
 
-    browser.close()
-    console.log(data)
+    // console.log(data)
   
   })
   .catch(err => { console.log(err) })
