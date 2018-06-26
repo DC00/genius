@@ -11,7 +11,6 @@ const Artist = require('./artist.js')
 const config = require('./config.json')
 
 async function scrollToBottom(page, prevHeight) {
-  console.log("in scroll to bottom")
   const pageHeight = await page.evaluate('document.body.scrollHeight')
   if (prevHeight < pageHeight)
     await page.evaluate('window.scrollTo(0, document.body.scrollHeight)');
@@ -24,34 +23,30 @@ async function getAnnotations(page) {
   const $ = cheerio.load(html)
   await page.waitFor(1000)
   const annotations = $('.standalone_annotation-annotation').length
-  console.log("in get annotations, length : " + annotations)
   return annotations
 }
 
 
 async function scrapeInfiniteScroll(page, getAnnotations, delay) {
-  console.log("in inf scroll")
   let prevAnnotationCount = -9
   let annotationCount = await getAnnotations(page)
   let prevHeight = -1
 
-  await scrollToBottom(page, prevHeight)
+  // await scrollToBottom(page, prevHeight)
+  // await page.waitFor(delay)
 
   while (prevAnnotationCount <= (annotationCount - 8)) {
     prevAnnotationCount = annotationCount
     prevHeight = await scrollToBottom(page, prevHeight)
     await page.waitFor(delay)
     annotationCount = await getAnnotations(page)
-    console.log("annotation count: " + annotationCount)
   }
 
   return annotationCount
 }
 
 async function scrapeArtistPage(data, artistPage) {
-  console.log("in scrape artist page")
   let annotationCount = 0
-  console.log(config.genius_root + data.url)
   await artistPage.goto(config.genius_root + data.url, {waitUntil: "networkidle2"})
 
   let prevAnnotationCount = -9
@@ -63,7 +58,6 @@ async function scrapeArtistPage(data, artistPage) {
     prevHeight = await scrollToBottom(artistPage, prevHeight)
     await artistPage.waitFor(1000)
     annotationCount = await getAnnotations(artistPage)
-    console.log("annotation count: " + annotationCount)
   }
 
   return annotationCount
@@ -126,6 +120,7 @@ async function scrape() {
     }).get())
   }
 
+  await page.close()
   await browser.close()
   return data
 }
@@ -134,33 +129,81 @@ function forEachPromise(items, fn) {
   return items.reduce((promise, item) => promise.then(() => fn(item)), Promise.resolve())
 }
 
+
+
 scrape()
   .then(async data => {
-    const browser = await puppeteer.launch({headless: false})
+    const browser = await puppeteer.launch({headless: true})
+    const batchSize = 5
+    const annotationBatchSize = 2
+    const numArtists = Object.keys(data).length
+    const numBatches = Math.ceil(numArtists / batchSize)
+    const numAnnotationBatches = Math.ceil(numArtists / annotationBatchSize)
+    const indicies = Array(numBatches).fill(0).map((e, i) => i * batchSize)
+    const annotationInx = Array(numAnnotationBatches).fill(0).map((e, i) => i * annotationBatchSize)
+    const bad = []
+    console.log(numArtists)
+    console.log(indicies)
+    console.log(annotationInx)
 
-    /*
-    const page = await browser.newPage()
-    await page.goto(config.genius_root + data[0].url, { waitUntil : "networkidle2" })
-    const followers = await page.evaluate((selector) => {
-      return document.querySelector(selector).innerText
-    }, config.follower_sel)
-    console.log(followers)
-    */
+    async function getFollowers(batchStart) {
+      console.log("New batch: " + batchStart)
+      const batch = data.slice(batchStart, batchStart + batchSize)
 
-  
-    data.map(async d => {
-      const page = await browser.newPage()
-      await page.goto(config.genius_root + d.url, { waitUntil : "networkidle2" })
-      d.followers = await page.evaluate((selector) => {
-
-      }, config.follower_sel)
-      console.log(d.followers)
-
-      return page.close()
-    })
+      await Promise.all(batch.map(async d => {
+        // followers
+        const page = await browser.newPage()
+        await page.goto(config.genius_root + d.url, { waitUntil : "networkidle2", timeout : 0 })
+        d.followers = await page.evaluate((selector) => {
+          return document.querySelector(selector).innerText
+        }, config.follower_sel)
 
 
-    // console.log(data)
+
+        console.log("Artist: " + d.name)
+        console.log("Followers: " + d.followers)
+        
+
+
+
+        return page.close()
+      }))
+      return data
+    }
+
+    async function fetchAnnotations(start) {
+      console.log("New annotation batch: " + start)
+      const batch = data.slice(start, start + annotationBatchSize)
+
+      await Promise.all(batch.map(async d => {
+        const page = await browser.newPage()
+        await page.goto(config.genius_root + d.url, { waitUntil : "networkidle2", timeout : 0 })
+        try {
+          await page.click(config.total_contributions_sel)
+          await page.click(config.annotations_sel)
+          d.annotations = await scrapeInfiniteScroll(page, getAnnotations, 3000)
+        } catch (err) {
+          bad.push(d.url)
+          console.log(err)
+        }
+
+        console.log("Artist: " + d.name)
+        console.log("Annotations: " + d.annotations)
+      
+        return page.close()
+      }))
+
+      return data
+    }
+
+    await forEachPromise(annotationInx, fetchAnnotations)
+    await forEachPromise(indicies, getFollowers)
+
+    console.log("bad===========")
+    console.log(bad)
+    console.log("good")
+    console.log(data)
+
   
   })
   .catch(err => { console.log(err) })
