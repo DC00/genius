@@ -32,6 +32,17 @@ async function scrapeInfiniteScroll(page, getAnnotations, delay) {
   let annotationCount = await getAnnotations(page)
   let prevHeight = -1
 
+
+  // better scraping method?
+  /*
+   * Increments of n
+   * not really infinite, end condition is (total) % 8 != 0
+   * How to test if last page is multiple of 8
+   * Can use xpath nth child string instead of cheerio to decrease compute time
+   * keep track of total and if total does not change after 1 iteration stop
+   */
+
+
   // await scrollToBottom(page, prevHeight)
   // await page.waitFor(delay)
 
@@ -133,7 +144,7 @@ function forEachPromise(items, fn) {
 
 scrape()
   .then(async data => {
-    const browser = await puppeteer.launch({headless: true})
+    const browser = await puppeteer.launch({headless: false})
     const batchSize = 5
     const annotationBatchSize = 2
     const numArtists = Object.keys(data).length
@@ -181,7 +192,7 @@ scrape()
         try {
           await page.click(config.total_contributions_sel)
           await page.click(config.annotations_sel)
-          d.annotations = await scrapeInfiniteScroll(page, getAnnotations, 3000)
+          d.annotations = await scrapeInfiniteScroll(page, getAnnotations, 1000)
         } catch (err) {
           bad.push(d.url)
           console.log(err)
@@ -199,7 +210,7 @@ scrape()
     await forEachPromise(annotationInx, fetchAnnotations)
     await forEachPromise(indicies, getFollowers)
 
-    console.log("bad===========")
+    console.log("bad")
     console.log(bad)
     console.log("good")
     console.log(data)
