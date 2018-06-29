@@ -4,5 +4,6 @@
   "follower_sel" : "body > routable-page > ng-outlet > routable-profile-page > ng-outlet > routed-page > profile-page > div.profile_header > div.column_layout > div.column_layout-column_span.column_layout-column_span--primary > div > h3:nth-child(2) > span",
   "max_page" : 2,
   "total_contributions_sel" : "body > routable-page > ng-outlet > routable-profile-page > ng-outlet > routed-page > profile-page > div.column_layout > div.column_layout-column_span.column_layout-column_span--primary > div > div > div > select-dropdown > span",
-  "annotations_sel" : "body > routable-page > ng-outlet > routable-profile-page > ng-outlet > routed-page > profile-page > div.column_layout > div.column_layout-column_span.column_layout-column_span--primary > div > div > div > select-dropdown > div > div:nth-child(2)"
+  "annotations_sel" : "body > routable-page > ng-outlet > routable-profile-page > ng-outlet > routed-page > profile-page > div.column_layout > div.column_layout-column_span.column_layout-column_span--primary > div > div > div > select-dropdown > div > div:nth-child(2)",
+  "annotation_card" : "body > routable-page > ng-outlet > routable-profile-page > ng-outlet > routed-page > profile-page > div.column_layout > div.column_layout-column_span.column_layout-column_span--primary > div > scrollable-data > div > transclude-injecting-local-scope:nth-child(##)"
 }

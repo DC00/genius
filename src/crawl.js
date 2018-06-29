@@ -28,32 +28,54 @@ async function getAnnotations(page) {
 
 
 async function scrapeInfiniteScroll(page, getAnnotations, delay) {
-  let prevAnnotationCount = -9
-  let annotationCount = await getAnnotations(page)
-  let prevHeight = -1
-
-
   // better scraping method?
   /*
-   * Increments of n
+   * Increments of 8
    * not really infinite, end condition is (total) % 8 != 0
    * How to test if last page is multiple of 8
    * Can use xpath nth child string instead of cheerio to decrease compute time
    * keep track of total and if total does not change after 1 iteration stop
    */
 
+  let prevHeight = -1
+  let count = 1
+  // try/catch works with synch and async/await code
+  try {
+    const currentCount = page.evaluate(() => {
+      return document.querySelector(config.annotation_card.replace("##", count))
+    })
+    console.log(currentCount)
+    count++
+    await scrollToBottom(page, prevHeight)
+    await page.waitFor(delay)
+  } catch (err) {
+    console.log(err)
+  }
 
-  // await scrollToBottom(page, prevHeight)
-  // await page.waitFor(delay)
 
+
+
+
+
+
+
+
+  /*
+  let prevAnnotationCount = -9
+  let annotationCount = await getAnnotations(page)
+  let prevHeight = -1
+  */
+
+  /*
   while (prevAnnotationCount <= (annotationCount - 8)) {
     prevAnnotationCount = annotationCount
     prevHeight = await scrollToBottom(page, prevHeight)
     await page.waitFor(delay)
     annotationCount = await getAnnotations(page)
   }
+  */
 
-  return annotationCount
+  // return annotationCount
 }
 
 async function scrapeArtistPage(data, artistPage) {
