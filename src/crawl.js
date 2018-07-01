@@ -40,17 +40,26 @@ async function scrapeInfiniteScroll(page, getAnnotations, delay) {
   let prevHeight = -1
   let count = 1
   // try/catch works with synch and async/await code
-  try {
-    const currentCount = page.evaluate(() => {
-      return document.querySelector(config.annotation_card.replace("##", count))
-    })
-    console.log(currentCount)
-    count++
-    await scrollToBottom(page, prevHeight)
-    await page.waitFor(delay)
-  } catch (err) {
-    console.log(err)
-  }
+  let currentCount = 1
+  
+  while (currentCount >= count) {
+    try {
+      let currentCount = page.evaluate(() => {
+        return document.querySelector(config.annotation_card.replace("##", count))
+      })
+      console.log(currentCount)
+      if (currentCount == count) {
+        return currentCount
+      }
+      count = currentCount
+      count += 1
+      await scrollToBottom(page, prevHeight)
+      await page.waitFor(delay)
+    } catch (err) {
+      console.log(err)
+      console.log("in catch of count")
+    }
+  } 
 
 
 
