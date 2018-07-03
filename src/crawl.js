@@ -64,26 +64,20 @@ async function scrapeInfiniteScroll(page, getAnnotations, delay) {
   let attrs = []
 
   // stop if count does not change after page scroll
-  while (currentCount != count) {
-    count = currentCount
+  while (attrs) {
     try {
-
-      // annotation selector conveniently has nth-child(<number>)
-      // can test if nth element exists
+      console.log("count=" + count)
       attrs = await page.evaluate((sel) => {
         return document.querySelector(sel)
       }, config.annotation_card_more.replace("##", count))
       
+      if (count % 8 == 0) {
+        prevHeight = await scrollToBottom(page, prevHeight)
+        await page.waitFor(delay)
+      }
       
-      // if nth element exists, increment count and scroll after 8 iterations
-      // else, count is not incremented and breaks loop
       if (attrs) {
-        console.log("increment")
-        currentCount += 1
-        if (currentCount % 8 == 0) {
-          prevHeight = await scrollToBottom(page, prevHeight)
-          await page.waitFor(delay)
-        }
+        count++
       }
 
     } catch (err) {
