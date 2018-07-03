@@ -37,35 +37,63 @@ async function scrapeInfiniteScroll(page, getAnnotations, delay) {
    * keep track of total and if total does not change after 1 iteration stop
    */
 
-  let prevHeight = -1
-  let count = 1
-  // try/catch works with synch and async/await code
-  let currentCount = 1
+
+  /*
+   * test if has > 8 annotations with cheerio
+   * if true, then use annotation_card
+   * else, return count
+   */
   
-  while (currentCount >= count) {
+  // find artists with more than 8 annotations, sort ascending
+  // db.artists.aggregate( {$match: {annotations: {$gt: 8}}}, {$sort: {annotations: 1}} )
+  await page.waitFor(delay)
+  await scrollToBottom(page, 0)
+  await page.waitFor(delay)
+  const html = await page.content()
+  const $ = cheerio.load(html)
+  await page.waitFor(delay)
+  const annotations = $('.standalone_annotation-annotation').length
+  if (parseInt(annotations) <= 8) { 
+    console.log("returning <=8")
+    return annotations
+  }
+
+  let count = 1
+  let currentCount = 8
+  let prevHeight = -1
+  let attrs = []
+
+  // stop if count does not change after page scroll
+  while (currentCount != count) {
+    count = currentCount
     try {
-      let currentCount = page.evaluate(() => {
-        return document.querySelector(config.annotation_card.replace("##", count))
-      })
-      console.log(currentCount)
-      if (currentCount == count) {
-        return currentCount
+
+      // annotation selector conveniently has nth-child(<number>)
+      // can test if nth element exists
+      attrs = await page.evaluate((sel) => {
+        return document.querySelector(sel)
+      }, config.annotation_card_more.replace("##", count))
+      
+      
+      // if nth element exists, increment count and scroll after 8 iterations
+      // else, count is not incremented and breaks loop
+      if (attrs) {
+        console.log("increment")
+        currentCount += 1
+        if (currentCount % 8 == 0) {
+          prevHeight = await scrollToBottom(page, prevHeight)
+          await page.waitFor(delay)
+        }
       }
-      count = currentCount
-      count += 1
-      await scrollToBottom(page, prevHeight)
-      await page.waitFor(delay)
+
     } catch (err) {
+      console.log("errored on count=" + count)
       console.log(err)
-      console.log("in catch of count")
     }
-  } 
+  }
 
-
-
-
-
-
+  return count - 1
+  
 
 
 
@@ -73,18 +101,17 @@ async function scrapeInfiniteScroll(page, getAnnotations, delay) {
   let prevAnnotationCount = -9
   let annotationCount = await getAnnotations(page)
   let prevHeight = -1
-  */
 
-  /*
   while (prevAnnotationCount <= (annotationCount - 8)) {
     prevAnnotationCount = annotationCount
     prevHeight = await scrollToBottom(page, prevHeight)
     await page.waitFor(delay)
     annotationCount = await getAnnotations(page)
+    console.log("annotations: " + annotationCount)
   }
-  */
 
-  // return annotationCount
+  return annotationCount
+  */
 }
 
 async function scrapeArtistPage(data, artistPage) {
@@ -175,7 +202,7 @@ function forEachPromise(items, fn) {
 
 scrape()
   .then(async data => {
-    const browser = await puppeteer.launch({headless: false})
+    const browser = await puppeteer.launch({headless: true})
     const batchSize = 5
     const annotationBatchSize = 2
     const numArtists = Object.keys(data).length
