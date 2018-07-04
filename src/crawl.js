@@ -6,7 +6,6 @@
 const puppeteer = require('puppeteer') 
 const cheerio = require('cheerio')
 const mongoose = require('mongoose')
-const Promise = require('bluebird')
 const Artist = require('./artist.js')
 const config = require('./config.json')
 
@@ -136,14 +135,6 @@ async function scrape() {
   const artistPage = await browser.newPage()
   let data = []
 
-  /*
-  await page.goto(config.genius_root + '/Eminem', {waitUntil: "networkidle2"})
-  await page.click(config.total_contributions_sel)
-  await page.click(config.annotations_sel)
-  var annotations = await scrapeInfiniteScroll(page, getAnnotations, 2000)
-  console.log("total annotation count --> " + annotations)
-  */
-
   for (var i = 1; i < config.max_page; i++) {
     await page.goto(config.verified_artists_url + i)
     const html = await page.content()
@@ -153,31 +144,6 @@ async function scrape() {
       const name = $(badge).find('[data-id]').text().trim()
       const iq = $(badge).find('.iq').text().trim()
       const url = $(badge).find('a').attr('href')
-
-      /*
-      await page.goto(config.genius_root + url, {waitUntil: "networkidle2"})
-      const followers = await page.evaluate((selector) => {
-        console.log(document.getElementsByClassName(selector))
-        return document.querySelector(selector).innerText
-      }, config.follower_sel)
-
-      try {
-        await page.click(config.total_contributions_sel, {
-          button : "left",
-          clickCount : 1,
-          delay : 50
-        })
-        await page.click(config.annotations_sel, {
-          button : "left",
-          clickCount : 1,
-          delay : 50
-        })
-      } catch (err) {
-        console.log("wtf click" + err)
-      }
-      console.log("calling get annotations")
-      const annotations = await scrapeInfiniteScroll(page, getAnnotations, 1000)
-      */
 
       return {"name":name, "iq":iq, "url":url}
     }).get())
