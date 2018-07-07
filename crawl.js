@@ -7,6 +7,14 @@ const puppeteer = require('puppeteer')
 const cheerio = require('cheerio')
 const config = require('./config.json')
 const dbService = require('./mongoService')
+const winston = require('winston');
+const logger = winston.createLogger({
+  transports: [
+    new winston.transports.Console(),
+    new winston.transports.File({ filename: 'error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'server.log' })
+  ]
+});
 
 async function scrollToBottom(page, prevHeight) {
   const pageHeight = await page.evaluate('document.body.scrollHeight')
@@ -21,7 +29,7 @@ async function scrollToBottom(page, prevHeight) {
  * Scrolls to bottom of page and counts number of annotation elements
  * Loops until total annotation count does not change after scroll load
  */
-async function scrapeInfiniteScroll(page, delay) {
+async function getAnnotations(page, url, name, delay) {
   // find artists with more than 8 annotations, sort ascending
   // db.artists.aggregate( {$match: {annotations: {$gt: 8}}}, {$sort: {annotations: 1}} )
   await page.waitFor(delay)
@@ -32,7 +40,6 @@ async function scrapeInfiniteScroll(page, delay) {
   await page.waitFor(delay)
   const annotations = $('.standalone_annotation-annotation').length
   if (parseInt(annotations) <= 8) { 
-    console.log("returning <=8")
     return annotations
   }
 
@@ -44,7 +51,6 @@ async function scrapeInfiniteScroll(page, delay) {
   // stop if count does not change after page scroll
   while (attrs) {
     try {
-      console.log("count=" + count)
       attrs = await page.evaluate((sel) => {
         return document.querySelector(sel)
       }, config.annotation_card_more.replace("##", count))
@@ -59,8 +65,7 @@ async function scrapeInfiniteScroll(page, delay) {
       }
 
     } catch (err) {
-      console.log("errored on count=" + count)
-      console.log(err)
+      logger.error("errored on count=" + count + "for artist=" + name + " url=" + url)
     }
   }
 
@@ -132,12 +137,12 @@ scrape()
     const annotationSlicesToBatch = Array(numAnnotationBatches).fill(0).map((e, i) => i * config.annotationBatchSize)
 
     const bad = []
-    console.log("Number of Artists: " + numArtists)
-    console.log("Artists Slices: " + slicesToBatch)
-    console.log("Annotation Slices: " + annotationSlicesToBatch)
+    logger.info("Number of Artists: " + numArtists)
+    logger.info("Artists Slices: " + slicesToBatch)
+    logger.info("Annotation Slices: " + annotationSlicesToBatch)
 
     async function getFollowers(batchStart) {
-      console.log("New batch: " + batchStart)
+      logger.info("New batch: " + batchStart)
       const batch = data.slice(batchStart, batchStart + config.batchSize)
 
       /*
@@ -151,8 +156,8 @@ scrape()
           return document.querySelector(selector).innerText
         }, config.followerSel)
 
-        console.log("Artist: " + d.name)
-        console.log("Followers: " + d.followers)
+        logger.info("Artist: " + d.name)
+        logger.info("Followers: " + d.followers)
 
         return page.close()
       }))
@@ -160,7 +165,7 @@ scrape()
     }
 
     async function fetchAnnotations(start) {
-      console.log("New annotation batch: " + start)
+      logger.info("New annotation batch: " + start)
       const batch = data.slice(start, start + config.annotationBatchSize)
 
       await Promise.all(batch.map(async d => {
@@ -169,14 +174,13 @@ scrape()
         try {
           await page.click(config.total_contributions_sel)
           await page.click(config.annotations_sel)
-          d.annotations = await scrapeInfiniteScroll(page, 1000)
+          d.annotations = await getAnnotations(page, d.url, d.name, 1000)
         } catch (err) {
-          bad.push(d.url)
-          console.log(err)
+          logger.error(d)
         }
 
-        console.log("Artist: " + d.name)
-        console.log("Annotations: " + d.annotations)
+        logger.info("Artist: " + d.name)
+        logger.info("Annotations: " + d.annotations)
 
       
         return page.close()
@@ -190,4 +194,4 @@ scrape()
     await forEachPromise(annotationSlicesToBatch, fetchAnnotations)
     await forEachPromise(slicesToBatch, getFollowers)
   })
-  .catch(err => { console.log(err) })
+  .catch(err => { logger.error(err) })
