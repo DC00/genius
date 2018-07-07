@@ -17,38 +17,11 @@ async function scrollToBottom(page, prevHeight) {
 }
 
 /*
-async function getAnnotations(page) {
-  const html = await page.content()
-  const $ = cheerio.load(html)
-  await page.waitFor(1000)
-  const annotations = $('.standalone_annotation-annotation').length
-  return annotations
-}
-*/
-
-
-/*
  * Scrapes total number of annotations on an artist's profile page
  * Scrolls to bottom of page and counts number of annotation elements
  * Loops until total annotation count does not change after scroll load
  */
 async function scrapeInfiniteScroll(page, delay) {
-  // better scraping method?
-  /*
-   * Increments of 8
-   * not really infinite, end condition is (total) % 8 != 0
-   * How to test if last page is multiple of 8
-   * Can use xpath nth child string instead of cheerio to decrease compute time
-   * keep track of total and if total does not change after 1 iteration stop
-   */
-
-
-  /*
-   * test if has > 8 annotations with cheerio
-   * if true, then use annotation_card
-   * else, return count
-   */
-  
   // find artists with more than 8 annotations, sort ascending
   // db.artists.aggregate( {$match: {annotations: {$gt: 8}}}, {$sort: {annotations: 1}} )
   await page.waitFor(delay)
@@ -92,48 +65,7 @@ async function scrapeInfiniteScroll(page, delay) {
   }
 
   return count - 1
-  
-
-
-
-  /*
-  let prevAnnotationCount = -9
-  let annotationCount = await getAnnotations(page)
-  let prevHeight = -1
-
-  while (prevAnnotationCount <= (annotationCount - 8)) {
-    prevAnnotationCount = annotationCount
-    prevHeight = await scrollToBottom(page, prevHeight)
-    await page.waitFor(delay)
-    annotationCount = await getAnnotations(page)
-    console.log("annotations: " + annotationCount)
-  }
-
-  return annotationCount
-  */
 }
-
-/*
-async function scrapeArtistPage(data, artistPage) {
-  let annotationCount = 0
-  await artistPage.goto(config.genius_root + data.url, {waitUntil: "networkidle2"})
-
-  let prevAnnotationCount = -9
-  let prevHeight = -1
-  annotationCount = await getAnnotations(artistPage)
-
-  while (prevAnnotationCount <= (annotationCount - 8)) {
-    prevAnnotationCount = annotationCount
-    prevHeight = await scrollToBottom(artistPage, prevHeight)
-    await artistPage.waitFor(1000)
-    annotationCount = await getAnnotations(artistPage)
-  }
-
-  return annotationCount
-
-}
-*/
-
 
 /* 
  * Gets name, iq, and url extension for each artist on /verified-artists?page=XX
@@ -161,9 +93,6 @@ async function scrape() {
 
   await page.close()
   await browser.close()
-  console.log("accessing data ###")
-  console.log(data[0])
-  console.log(data[0]["name"])
   return data
 }
 
@@ -185,14 +114,9 @@ async function scrapeArtist(url) {
   return { "name": name, "iq": iq, "url": url, "followers": followers }
 }
 
-
 // https://www.jacoduplessis.co.za/async-js-batching/
 function forEachPromise(items, fn) {
   return items.reduce((promise, item) => promise.then(() => fn(item)), Promise.resolve())
-}
-
-function upsert(data) {
-  
 }
 
 scrape()
@@ -235,8 +159,6 @@ scrape()
       return data
     }
 
-
-
     async function fetchAnnotations(start) {
       console.log("New annotation batch: " + start)
       const batch = data.slice(start, start + config.annotationBatchSize)
@@ -260,11 +182,6 @@ scrape()
         return page.close()
       }))
 
-      console.log("after scrape access ###")
-      console.log(data[0])
-      console.log(data[0].name)
-      console.log(data[0].followers)
-      
       dbService.upsert(data)       
 
       return data
@@ -272,11 +189,5 @@ scrape()
 
     await forEachPromise(annotationSlicesToBatch, fetchAnnotations)
     await forEachPromise(slicesToBatch, getFollowers)
-
-    console.log("bad")
-    console.log(bad)
-    console.log("good")
-    console.log(data)
-  
   })
   .catch(err => { console.log(err) })
