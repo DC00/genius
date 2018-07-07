@@ -5,9 +5,8 @@
 
 const puppeteer = require('puppeteer') 
 const cheerio = require('cheerio')
-const mongoose = require('mongoose')
-const Artist = require('./artist.js')
 const config = require('./config.json')
+const dbService = require('./mongoService')
 
 async function scrollToBottom(page, prevHeight) {
   const pageHeight = await page.evaluate('document.body.scrollHeight')
@@ -17,6 +16,7 @@ async function scrollToBottom(page, prevHeight) {
   return pageHeight
 }
 
+/*
 async function getAnnotations(page) {
   const html = await page.content()
   const $ = cheerio.load(html)
@@ -24,9 +24,15 @@ async function getAnnotations(page) {
   const annotations = $('.standalone_annotation-annotation').length
   return annotations
 }
+*/
 
 
-async function scrapeInfiniteScroll(page, getAnnotations, delay) {
+/*
+ * Scrapes total number of annotations on an artist's profile page
+ * Scrolls to bottom of page and counts number of annotation elements
+ * Loops until total annotation count does not change after scroll load
+ */
+async function scrapeInfiniteScroll(page, delay) {
   // better scraping method?
   /*
    * Increments of 8
@@ -107,6 +113,7 @@ async function scrapeInfiniteScroll(page, getAnnotations, delay) {
   */
 }
 
+/*
 async function scrapeArtistPage(data, artistPage) {
   let annotationCount = 0
   await artistPage.goto(config.genius_root + data.url, {waitUntil: "networkidle2"})
@@ -125,17 +132,19 @@ async function scrapeArtistPage(data, artistPage) {
   return annotationCount
 
 }
+*/
 
 
+/* 
+ * Gets name, iq, and url extension for each artist on /verified-artists?page=XX
+ * Returns list of json elements [{ name: "abc", iq: 101, url: "/Eminem" }, ...]
+ */
 async function scrape() {
-  const browser = await puppeteer.launch({
-    headless : true
-  })
+  const browser = await puppeteer.launch({ headless: true })
   const page = await browser.newPage()
-  const artistPage = await browser.newPage()
   let data = []
 
-  for (var i = 1; i < config.max_page; i++) {
+  for (var i = 422; i < config.max_page; i++) {
     await page.goto(config.verified_artists_url + i)
     const html = await page.content()
     const $ = cheerio.load(html)
@@ -147,62 +156,90 @@ async function scrape() {
 
       return {"name":name, "iq":iq, "url":url}
     }).get())
+
   }
 
   await page.close()
   await browser.close()
+  console.log("accessing data ###")
+  console.log(data[0])
+  console.log(data[0]["name"])
   return data
 }
 
+async function scrapeArtist(url) {
+  const browser = await puppeteer.launch({ headless: false })
+  const page = await browser.newPage()
+
+  await page.goto(config.genius_root + url)
+  const html = await page.content()
+  const $ = cheerio.load(html)
+
+  const name = $(config.artistPageNameSel).text().trim()
+  const iq = $(config.artistPageIqSel).text().trim()
+  const followers = $(config.followerSel).text().trim()
+
+  await page.close()
+  await browser.close()
+
+  return { "name": name, "iq": iq, "url": url, "followers": followers }
+}
+
+
+// https://www.jacoduplessis.co.za/async-js-batching/
 function forEachPromise(items, fn) {
   return items.reduce((promise, item) => promise.then(() => fn(item)), Promise.resolve())
 }
 
-
+function upsert(data) {
+  
+}
 
 scrape()
   .then(async data => {
-    const browser = await puppeteer.launch({headless: true})
-    const batchSize = 5
-    const annotationBatchSize = 2
+    const browser = await puppeteer.launch({ headless: false })
+
+    // data is not a json array for some reason
     const numArtists = Object.keys(data).length
-    const numBatches = Math.ceil(numArtists / batchSize)
-    const numAnnotationBatches = Math.ceil(numArtists / annotationBatchSize)
-    const indicies = Array(numBatches).fill(0).map((e, i) => i * batchSize)
-    const annotationInx = Array(numAnnotationBatches).fill(0).map((e, i) => i * annotationBatchSize)
+    const numBatches = Math.ceil(numArtists / config.batchSize)
+    const numAnnotationBatches = Math.ceil(numArtists / config.annotationBatchSize)
+
+    const slicesToBatch = Array(numBatches).fill(0).map((e, i) => i * config.batchSize)
+    const annotationSlicesToBatch = Array(numAnnotationBatches).fill(0).map((e, i) => i * config.annotationBatchSize)
+
     const bad = []
-    console.log(numArtists)
-    console.log(indicies)
-    console.log(annotationInx)
+    console.log("Number of Artists: " + numArtists)
+    console.log("Artists Slices: " + slicesToBatch)
+    console.log("Annotation Slices: " + annotationSlicesToBatch)
 
     async function getFollowers(batchStart) {
       console.log("New batch: " + batchStart)
-      const batch = data.slice(batchStart, batchStart + batchSize)
+      const batch = data.slice(batchStart, batchStart + config.batchSize)
 
+      /*
+       * Get followers on each artist page
+       * Returns { name: "abc", iq: 101, url: "/Eminem", followers: 236 }
+       */
       await Promise.all(batch.map(async d => {
-        // followers
         const page = await browser.newPage()
-        await page.goto(config.genius_root + d.url, { waitUntil : "networkidle2", timeout : 0 })
+        await page.goto(config.genius_root + d.url, { waitUntil: "networkidle2", timeout: 0 })
         d.followers = await page.evaluate((selector) => {
           return document.querySelector(selector).innerText
-        }, config.follower_sel)
-
-
+        }, config.followerSel)
 
         console.log("Artist: " + d.name)
         console.log("Followers: " + d.followers)
-        
-
-
 
         return page.close()
       }))
       return data
     }
 
+
+
     async function fetchAnnotations(start) {
       console.log("New annotation batch: " + start)
-      const batch = data.slice(start, start + annotationBatchSize)
+      const batch = data.slice(start, start + config.annotationBatchSize)
 
       await Promise.all(batch.map(async d => {
         const page = await browser.newPage()
@@ -210,7 +247,7 @@ scrape()
         try {
           await page.click(config.total_contributions_sel)
           await page.click(config.annotations_sel)
-          d.annotations = await scrapeInfiniteScroll(page, getAnnotations, 1000)
+          d.annotations = await scrapeInfiniteScroll(page, 1000)
         } catch (err) {
           bad.push(d.url)
           console.log(err)
@@ -218,21 +255,28 @@ scrape()
 
         console.log("Artist: " + d.name)
         console.log("Annotations: " + d.annotations)
+
       
         return page.close()
       }))
 
+      console.log("after scrape access ###")
+      console.log(data[0])
+      console.log(data[0].name)
+      console.log(data[0].followers)
+      
+      dbService.upsert(data)       
+
       return data
     }
 
-    await forEachPromise(annotationInx, fetchAnnotations)
-    await forEachPromise(indicies, getFollowers)
+    await forEachPromise(annotationSlicesToBatch, fetchAnnotations)
+    await forEachPromise(slicesToBatch, getFollowers)
 
     console.log("bad")
     console.log(bad)
     console.log("good")
     console.log(data)
-
   
   })
   .catch(err => { console.log(err) })
