@@ -211,5 +211,5 @@ scrape()
     await forEachPromise(slicesToBatch, getFollowers)
 
   })
-  .then(() => { logger.info("############# Done! ##############")
+  .then(() => { logger.info("############# Done! ##############") })
   .catch(err => { logger.error(err) })
