@@ -15,6 +15,7 @@ const myFormat = printf(info => {
 const logger = createLogger({
   format: combine(
     format.colorize(),
+    timestamp(),
     myFormat
   ),
   transports: [
