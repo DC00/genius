@@ -7,12 +7,20 @@ const puppeteer = require('puppeteer')
 const cheerio = require('cheerio')
 const config = require('./config.json')
 const dbService = require('./mongoService')
-const winston = require('winston');
-const logger = winston.createLogger({
+const { createLogger, format, transports } = require('winston');
+const { combine, timestamp, label, printf } = format;
+const myFormat = printf(info => {
+  return `${info.timestamp} [${info.label}] ${info.level}: ${info.message}`;
+});
+const logger = createLogger({
+  format: combine(
+    format.colorize(),
+    myFormat
+  ),
   transports: [
-    new winston.transports.Console(),
-    new winston.transports.File({ filename: 'error.log', level: 'error' }),
-    new winston.transports.File({ filename: 'server.log' })
+    new transports.Console({ format: format.simple() }),
+    new transports.File({ filename: 'error.log', level: 'error' }),
+    new transports.File({ filename: 'server.log' })
   ]
 });
 
@@ -59,6 +67,8 @@ async function getAnnotations(page, url, name, delay) {
         prevHeight = await scrollToBottom(page, prevHeight)
         await page.waitFor(delay)
       }
+
+      logger.info(name + ":" + count)
       
       if (attrs) {
         count++
@@ -80,20 +90,22 @@ async function scrape() {
   const browser = await puppeteer.launch({ headless: true })
   const page = await browser.newPage()
   let data = []
+  logger.info("### scrape ###")
 
-  for (var i = 422; i < config.max_page; i++) {
+  for (var i = 1; i <= config.max_page; i++) {
     await page.goto(config.verified_artists_url + i)
     const html = await page.content()
     const $ = cheerio.load(html)
 
     data = await Promise.all($('.badge_container').map(async function(inx, badge) {
       const name = $(badge).find('[data-id]').text().trim()
-      const iq = $(badge).find('.iq').text().trim()
+      const iq = parseInt($(badge).find('.iq').text().trim())
       const url = $(badge).find('a').attr('href')
 
+      logger.info(name + " " + iq + " " + url)
       return {"name":name, "iq":iq, "url":url}
     }).get())
-
+    logger.info("page=" + i)
   }
 
   await page.close()
@@ -102,7 +114,8 @@ async function scrape() {
 }
 
 async function scrapeArtist(url) {
-  const browser = await puppeteer.launch({ headless: false })
+  logger.info("### scrapeArtist ###")
+  const browser = await puppeteer.launch({ headless: true })
   const page = await browser.newPage()
 
   await page.goto(config.genius_root + url)
@@ -126,7 +139,8 @@ function forEachPromise(items, fn) {
 
 scrape()
   .then(async data => {
-    const browser = await puppeteer.launch({ headless: false })
+    logger.info("### fanotations ###")
+    const browser = await puppeteer.launch({ headless: true })
 
     // data is not a json array for some reason
     const numArtists = Object.keys(data).length
@@ -142,6 +156,7 @@ scrape()
     logger.info("Annotation Slices: " + annotationSlicesToBatch)
 
     async function getFollowers(batchStart) {
+      logger.info("### getFollowers ###")
       logger.info("New batch: " + batchStart)
       const batch = data.slice(batchStart, batchStart + config.batchSize)
 
@@ -165,6 +180,7 @@ scrape()
     }
 
     async function fetchAnnotations(start) {
+      logger.info("### fetchAnnotations ###")
       logger.info("New annotation batch: " + start)
       const batch = data.slice(start, start + config.annotationBatchSize)
 
@@ -187,11 +203,13 @@ scrape()
       }))
 
       dbService.upsert(data)       
-
+      logger.info("Done with batch: " + start)
       return data
     }
 
     await forEachPromise(annotationSlicesToBatch, fetchAnnotations)
     await forEachPromise(slicesToBatch, getFollowers)
+
   })
+  .then(() => { logger.info("############# Done! ##############")
   .catch(err => { logger.error(err) })
