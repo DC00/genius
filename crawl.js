@@ -92,7 +92,7 @@ async function scrape() {
   let data = []
   logger.info("### scrape ###")
 
-  for (var i = 1; i <= config.max_page; i++) {
+  for (var i = config.start_page; i <= config.end_page; i++) {
     await page.goto(config.verified_artists_url + i)
     const html = await page.content()
     const $ = cheerio.load(html)
