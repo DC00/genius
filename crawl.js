@@ -186,13 +186,12 @@ scrape()
       const batch = data.slice(start, start + config.annotationBatchSize)
 
       try {
-      await Promise.all(batch.forEach(async d => {
+      await Promise.all(batch.map(async d => {
         const page = await browser.newPage()
         await page.goto(config.genius_root + d.url, { waitUntil : "networkidle2", timeout : 0 })
         await page.click(config.total_contributions_sel)
         await page.click(config.annotations_sel)
         d.annotations = await getAnnotations(page, d.url, d.name, 1000)
-        // await dbService.upsert(d)
 
         logger.info("Artist: " + d.name)
         logger.info("Annotations: " + d.annotations)
@@ -203,7 +202,7 @@ scrape()
         logger.error("err in promise all fetchAnnotations " + err)
       }
 
-      // dbService.upsert(data)       
+      dbService.upsert(data)
       return data
     }
 
