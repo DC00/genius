@@ -9,17 +9,13 @@ const config = require('./config.json')
 const dbService = require('./mongoService')
 const { createLogger, format, transports } = require('winston');
 const { combine, timestamp, printf } = format;
-const myFormat = printf(info => {
-  return `${info.timestamp} ${info.level}: ${info.message}`;
-});
 const logger = createLogger({
   format: combine(
     format.colorize(),
-    timestamp(),
-    myFormat
+    format.simple()
   ),
   transports: [
-    new transports.Console({ format: format.simple() }),
+    new transports.Console(),
     new transports.File({ filename: 'error.log', level: 'error' }),
     new transports.File({ filename: 'server.log' })
   ]
@@ -151,7 +147,6 @@ scrape()
     const slicesToBatch = Array(numBatches).fill(0).map((e, i) => i * config.batchSize)
     const annotationSlicesToBatch = Array(numAnnotationBatches).fill(0).map((e, i) => i * config.annotationBatchSize)
 
-    const bad = []
     logger.info("Number of Artists: " + numArtists)
     logger.info("Artists Slices: " + slicesToBatch)
     logger.info("Annotation Slices: " + annotationSlicesToBatch)
@@ -165,6 +160,7 @@ scrape()
        * Get followers on each artist page
        * Returns { name: "abc", iq: 101, url: "/Eminem", followers: 236 }
        */
+      try {
       await Promise.all(batch.map(async d => {
         const page = await browser.newPage()
         await page.goto(config.genius_root + d.url, { waitUntil: "networkidle2", timeout: 0 })
@@ -177,6 +173,10 @@ scrape()
 
         return page.close()
       }))
+      } catch (err) {
+        logger.error("err in promise all follower count" + err)
+      }
+
       return data
     }
 
@@ -185,32 +185,30 @@ scrape()
       logger.info("New annotation batch: " + start)
       const batch = data.slice(start, start + config.annotationBatchSize)
 
-      await Promise.all(batch.map(async d => {
+      try {
+      await Promise.all(batch.forEach(async d => {
         const page = await browser.newPage()
         await page.goto(config.genius_root + d.url, { waitUntil : "networkidle2", timeout : 0 })
-        try {
-          await page.click(config.total_contributions_sel)
-          await page.click(config.annotations_sel)
-          d.annotations = await getAnnotations(page, d.url, d.name, 1000)
-        } catch (err) {
-          logger.error(d)
-        }
+        await page.click(config.total_contributions_sel)
+        await page.click(config.annotations_sel)
+        d.annotations = await getAnnotations(page, d.url, d.name, 1000)
+        // await dbService.upsert(d)
 
         logger.info("Artist: " + d.name)
         logger.info("Annotations: " + d.annotations)
 
-      
-        return page.close()
+        await page.close()
       }))
+      } catch (err) {
+        logger.error("err in promise all fetchAnnotations " + err)
+      }
 
-      dbService.upsert(data)       
-      logger.info("Done with batch: " + start)
+      // dbService.upsert(data)       
       return data
     }
 
     await forEachPromise(annotationSlicesToBatch, fetchAnnotations)
     await forEachPromise(slicesToBatch, getFollowers)
-
   })
   .then(() => { logger.info("############# Done! ##############") })
-  .catch(err => { logger.error(err) })
+  .catch(err => { logger.error("###" + err) })
