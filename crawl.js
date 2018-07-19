@@ -126,7 +126,7 @@ async function scrape() {
     logger.info("waiting E")
     data = await Promise.all($('.badge_container').map(async function(inx, badge) {
       const name = $(badge).find('[data-id]').text().trim()
-      const iq = parseInt($(badge).find('.iq').text().trim())
+      const iq = parseInt($(badge).find('.iq').text().replace(',', '').trim())
       const url = $(badge).find('a').attr('href')
 
       logger.info(name + " " + iq + " " + url)
@@ -165,7 +165,7 @@ async function scrapeArtist(url) {
   const $ = cheerio.load(html)
 
   const name = $(config.artistPageNameSel).text().trim()
-  const iq = $(config.artistPageIqSel).text().trim()
+  const iq = parseInt($(config.artistPageIqSel).text().replace(',', '').trim())
   const followers = $(config.followerSel).text().trim()
 
   logger.info("waiting L")
@@ -188,7 +188,7 @@ scrape()
   .then(async data => {
     logger.info("### fanotations ###")
     logger.info("waiting N")
-    const browser = await puppeteer.launch({ headless: false })
+    const browser = await puppeteer.launch({ headless: true })
     logger.info("after N")
 
     // data is not a json array for some reason
@@ -226,7 +226,7 @@ scrape()
           try {
             logger.info("waiting R")
             d.followers = await page.evaluate((selector) => {
-              return document.querySelector(selector).innerText
+              return document.querySelector(selector).innerText.replace(',','')
             }, config.followerSel)
             logger.info("after R")
           } catch (err) {
@@ -236,14 +236,16 @@ scrape()
           logger.info("Artist: " + d.name)
           logger.info("Followers: " + d.followers)
 
-          return page.close()
+          await page.close()
+
+          return d
         }))
         logger.info("after O")
       } catch (err) {
         logger.error("err in promise all follower count" + err)
       }
 
-      return data
+      return batch
     }
 
     async function fetchAnnotations(start) {
@@ -267,6 +269,9 @@ scrape()
           await page.click(config.annotations_sel)
           logger.info("after W")
           logger.info("waiting X")
+          d.followers = await page.evaluate((selector) => {
+            return document.querySelector(selector).innerText.replace(',', '')
+          }, config.followerSel)
           d.annotations = await getAnnotations(page, d.url, d.name, 1000)
           logger.info("after X")
 
@@ -283,17 +288,17 @@ scrape()
       }
 
       logger.info("waiting on upsert")
-      dbService.upsert(data)
+      dbService.upsert(batch)
       logger.info("after upsert")
-      return data
+      return batch
     }
 
     logger.info("waiting for fetch annotations")
     await forEachPromise(annotationSlicesToBatch, fetchAnnotations)
     logger.info("finished all fetch annotations")
-    logger.info("waiting for get followers")
-    await forEachPromise(slicesToBatch, getFollowers)
-    logger.info("finished all get Followers")
+    // logger.info("waiting for get followers")
+    // await forEachPromise(slicesToBatch, getFollowers)
+    // logger.info("finished all get Followers")
   })
   .then(() => { logger.info("############# Done! ##############") })
   .catch(err => { logger.error("########### ERROR ##############" + err) })
