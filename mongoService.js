@@ -9,11 +9,9 @@ db.on('error', console.error.bind(console, 'MongoDB connection error:'));
 
 exports.upsert = function(artists) {
   artists.map(artist => {
+    // match on these conditions
     const conditions = {
       name: artist.name,
-      iq: artist.iq,
-      followers: artist.followers,
-      annotations: artist.annotations,
       url: artist.url
     };
 
