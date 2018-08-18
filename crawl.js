@@ -165,8 +165,25 @@ async function scrapeArtist(url) {
   const $ = cheerio.load(html)
 
   const name = $(config.artistPageNameSel).text().trim()
+  logger.info("#### name: " + name)
   const iq = parseInt($(config.artistPageIqSel).text().replace(',', '').trim())
+  logger.info("#### iq: " + iq)
   const followers = $(config.followerSel).text().trim()
+  logger.info("#### followers: " + followers)
+
+  logger.info("### fanotations in scrapeArtist ###")
+  // don't need to batch anything
+  try {
+    await page.click(config.total_contributions_sel)
+    await page.click(config.annotations_sel)
+    const annotations = await getAnnotations(page, url, name, 1000) 
+    logger.info("### annotations: " + annotations)
+
+  } catch (err) {
+    logger.error("err in fetchAnnotations in scrapeArtist")
+  }
+
+
 
   logger.info("waiting L")
   await page.close()
@@ -174,6 +191,8 @@ async function scrapeArtist(url) {
   logger.info("waiting M")
   await browser.close()
   logger.info("after M")
+
+  
 
   return { "name": name, "iq": iq, "url": url, "followers": followers }
 }
@@ -203,17 +222,18 @@ scrape()
     logger.info("Artists Slices: " + slicesToBatch)
     logger.info("Annotation Slices: " + annotationSlicesToBatch)
 
+    /*
     async function getFollowers(batchStart) {
       logger.info("### getFollowers ###")
       logger.info("New batch: " + batchStart)
       const batch = data.slice(batchStart, batchStart + config.batchSize)
 
-      /*
-       * Get followers on each artist page
-       * Returns { name: "abc", iq: 101, url: "/Eminem", followers: 236 }
-       */
+       // Get followers on each artist page
+       //  Returns { name: "abc", iq: 101, url: "/Eminem", followers: 236 }
       try {
         logger.info("waiting O")
+        logger.info(batch)
+        logger.info(batch[0])
         await Promise.all(batch.map(async d => {
           logger.info("waiting P")
           const page = await browser.newPage()
@@ -247,6 +267,7 @@ scrape()
 
       return batch
     }
+    */
 
     async function fetchAnnotations(start) {
       logger.info("### fetchAnnotations ###")
