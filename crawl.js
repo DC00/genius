@@ -41,7 +41,7 @@ async function scrollToBottom(page, prevHeight) {
  * Scrolls to bottom of page and counts number of annotation elements
  * Loops until total annotation count does not change after scroll load
  */
-async function getAnnotations(page, url, name, delay) {
+async function getAnnotations(page, url, delay) {
   // find artists with more than 8 annotations, sort ascending
   // db.artists.aggregate( {$match: {annotations: {$gt: 8}}}, {$sort: {annotations: 1}} )
   logger.info("waiting for delay")
@@ -86,14 +86,12 @@ async function getAnnotations(page, url, name, delay) {
         logger.info("after for delay 3?")
       }
 
-      logger.info(name + ":" + count)
-      
       if (attrs) {
         count++
       }
 
     } catch (err) {
-      logger.error("errored on count=" + count + "for artist=" + name + " url=" + url)
+      logger.error("errored on count=" + count + "for url=" + url)
     }
   }
 
@@ -150,7 +148,8 @@ async function scrape() {
 async function scrapeArtist(url) {
   logger.info("### scrapeArtist ###")
   logger.info("waiting H")
-  const browser = await puppeteer.launch({ headless: true })
+  logger.info("### url: " + url)
+  const browser = await puppeteer.launch({ headless: false })
   logger.info("after H")
   logger.info("waiting I")
   const page = await browser.newPage()
@@ -164,8 +163,8 @@ async function scrapeArtist(url) {
   logger.info("after K")
   const $ = cheerio.load(html)
 
-  const name = $(config.artistPageNameSel).text().trim()
-  logger.info("#### name: " + name)
+  // const name = $(config.artistPageNameSel).text().trim()
+  // logger.info("#### name: " + name)
   const iq = parseInt($(config.artistPageIqSel).text().replace(',', '').trim())
   logger.info("#### iq: " + iq)
   const followers = $(config.followerSel).text().trim()
@@ -176,13 +175,13 @@ async function scrapeArtist(url) {
   try {
     await page.click(config.total_contributions_sel)
     await page.click(config.annotations_sel)
-    const annotations = await getAnnotations(page, url, name, 1000) 
+    const annotations = await getAnnotations(page, url, 1000)
     logger.info("### annotations: " + annotations)
-
+    const artist = {"iq": iq, "url": url, "followers": followers, "annotations": annotations }
+    dbService.upsertOne(artist)
   } catch (err) {
     logger.error("err in fetchAnnotations in scrapeArtist")
   }
-
 
 
   logger.info("waiting L")
@@ -192,9 +191,6 @@ async function scrapeArtist(url) {
   await browser.close()
   logger.info("after M")
 
-  
-
-  return { "name": name, "iq": iq, "url": url, "followers": followers }
 }
 
 // https://www.jacoduplessis.co.za/async-js-batching/
@@ -202,6 +198,20 @@ function forEachPromise(items, fn) {
   logger.info("in for each promise")
   return items.reduce((promise, item) => promise.then(() => fn(item)), Promise.resolve())
 }
+
+
+
+scrapeArtist("/johnnypolygon")
+.then(() => { console.log("done scrape artist") })
+.catch((err) => { console.log("error in scrape artist") })
+
+
+
+
+
+
+/*
+
 
 scrape()
   .then(async data => {
@@ -221,53 +231,6 @@ scrape()
     logger.info("Number of Artists: " + numArtists)
     logger.info("Artists Slices: " + slicesToBatch)
     logger.info("Annotation Slices: " + annotationSlicesToBatch)
-
-    /*
-    async function getFollowers(batchStart) {
-      logger.info("### getFollowers ###")
-      logger.info("New batch: " + batchStart)
-      const batch = data.slice(batchStart, batchStart + config.batchSize)
-
-       // Get followers on each artist page
-       //  Returns { name: "abc", iq: 101, url: "/Eminem", followers: 236 }
-      try {
-        logger.info("waiting O")
-        logger.info(batch)
-        logger.info(batch[0])
-        await Promise.all(batch.map(async d => {
-          logger.info("waiting P")
-          const page = await browser.newPage()
-          logger.info("after P")
-          logger.info("going to page " + config.genius_root + d.url)
-          logger.info("waiting Q")
-          await page.goto(config.genius_root + d.url, { waitUntil: "networkidle2", timeout: 0 })
-          logger.info("after Q")
-          logger.info("on the page")
-          try {
-            logger.info("waiting R")
-            d.followers = await page.evaluate((selector) => {
-              return document.querySelector(selector).innerText.replace(',','')
-            }, config.followerSel)
-            logger.info("after R")
-          } catch (err) {
-            logger.info("can't find sel for followers")
-          }
-
-          logger.info("Artist: " + d.name)
-          logger.info("Followers: " + d.followers)
-
-          await page.close()
-
-          return d
-        }))
-        logger.info("after O")
-      } catch (err) {
-        logger.error("err in promise all follower count" + err)
-      }
-
-      return batch
-    }
-    */
 
     async function fetchAnnotations(start) {
       logger.info("### fetchAnnotations ###")
@@ -293,7 +256,7 @@ scrape()
           d.followers = await page.evaluate((selector) => {
             return document.querySelector(selector).innerText.replace(',', '')
           }, config.followerSel)
-          d.annotations = await getAnnotations(page, d.url, d.name, 1000)
+          d.annotations = await getAnnotations(page, d.url, 1000)
           logger.info("after X")
 
           logger.info("Artist: " + d.name)
@@ -323,3 +286,7 @@ scrape()
   })
   .then(() => { logger.info("############# Done! ##############") })
   .catch(err => { logger.error("########### ERROR ##############" + err) })
+
+
+
+*/

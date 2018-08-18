@@ -33,4 +33,30 @@ exports.upsert = function(artists) {
   })
 }
 
+exports.upsertOne = function(artist) {
+  console.log("########### in upsertOne ###########3")
+  console.log(artist.annotations)
+  
+  // not matching on name bc parsing iq problem
+  const conditions = {
+    url: artist.url
+  };
+
+  const options = {
+    upsert: true,
+    new: true,
+    setDefaultsOnInsert: true
+  };
+
+  Artist.findOneAndUpdate(conditions, artist, options).exec()
+    .then((artist) => {
+      console.log("Inserted: ");
+      console.log(artist);
+    })
+    .catch((artist) => {
+      console.log("Error inserting: ");
+      console.log(artist);
+    });
+}
+
 
