@@ -141,7 +141,56 @@ function forEachPromise(items, fn) {
 }
 
 
+/*
 scrapeArtist("/johnnypolygon")
 .then(() => { console.log("done scrape artist") })
 .catch((err) => { console.log("error in scrape artist") })
+*/
+
+scrape()
+  .then(async data => {
+    const browser = await puppeteer.launch({ headless: true })
+    // data is not a json array for some reason
+    const numArtists = Object.keys(data).length
+    const numBatches = Math.ceil(numArtists / config.batchSize)
+    const numAnnotationBatches = Math.ceil(numArtists / config.annotationBatchSize)
+    const slicesToBatch = Array(numBatches).fill(0).map((e, i) => i * config.batchSize)
+    const annotationSlicesToBatch = Array(numAnnotationBatches).fill(0).map((e, i) => i * config.annotationBatchSize)
+    logger.info("Number of Artists: " + numArtists)
+    logger.info("Artists Slices: " + slicesToBatch)
+    logger.info("Annotation Slices: " + annotationSlicesToBatch)
+    async function fetchAnnotations(start) {
+      logger.info("New annotation batch: " + start)
+      const batch = data.slice(start, start + config.annotationBatchSize)
+      try {
+        await Promise.all(batch.map(async d => {
+          const page = await browser.newPage()
+          await page.goto(config.genius_root + d.url, { waitUntil : "networkidle2", timeout : 0 })
+          await page.click(config.total_contributions_sel)
+          await page.click(config.annotations_sel)
+          d.followers = await page.evaluate((selector) => {
+            return document.querySelector(selector).innerText.replace(',', '')
+          }, config.followerSel)
+          d.annotations = await getAnnotations(page, d.url, 1000)
+          logger.info("Artist: " + d.name)
+          logger.info("Annotations: " + d.annotations)
+          await page.close()
+        }))
+      } catch (err) {
+        logger.error("err in promise all fetchAnnotations " + err)
+      }
+      logger.info("waiting on upsert")
+      dbService.upsert(batch)
+      logger.info("after upsert")
+      return batch
+    }
+    logger.info("waiting for fetch annotations")
+    await forEachPromise(annotationSlicesToBatch, fetchAnnotations)
+    logger.info("finished all fetch annotations")
+    // logger.info("waiting for get followers")
+    // await forEachPromise(slicesToBatch, getFollowers)
+    // logger.info("finished all get Followers")
+  })
+  .then(() => { logger.info("############# Done! ##############") })
+  .catch(err => { logger.error("########### ERROR ##############" + err) })
 
